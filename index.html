@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bogotá: Mapa de Emociones Urbanas</title>
+    
+    <!-- Tailwind CSS para el diseño -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS para el mapa interactivo -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    
+    <style>
+        /* Aplicación global de Times New Roman a todo el documento y elementos específicos */
+        body, html, p, span, h1, h2, h3, h4, h5, h6, button, div, li, ul, input, select {
+            font-family: 'Times New Roman', Times, serif !important;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            /* Degradado de amarillo fuerte a blanco con fondo fijo para transiciones suaves */
+            background: linear-gradient(to bottom, #eab308 0%, #fef08a 45%, #ffffff 100%) no-repeat !important;
+            background-attachment: fixed !important;
+        }
+
+        /* Título principal y títulos de subcategorías en color Rojo Sangre de Toro (#7a1c1c) */
+        h1, section h2 {
+            color: #7a1c1c !important;
+        }
+
+        /* Mantener blanco el título dentro del panel interactivo para legibilidad sobre el degradado oscuro */
+        #panel-title {
+            color: #ffffff !important;
+        }
+
+        #map-container {
+            position: relative;
+            width: 100%;
+            height: 65vh;
+            min-height: 500px;
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+            border: 1px solid #cbd5e1;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+            z-index: 1;
+        }
+        
+        /* Panel de información superpuesto */
+        #info-panel {
+            position: absolute;
+            z-index: 1000;
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            /* Estado oculto por defecto */
+            transform: translateX(120%);
+            opacity: 0;
+        }
+        
+        #info-panel.active {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        /* Ajustes para móviles */
+        @media (max-width: 768px) {
+            #info-panel {
+                transform: translateY(120%);
+            }
+            #info-panel.active {
+                transform: translateY(0);
+            }
+        }
+
+        /* Estilo para los marcadores personalizados */
+        .custom-marker {
+            background-color: #475569; /* Slate 600 */
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+        .custom-marker:hover {
+            transform: scale(1.2);
+            background-color: #334155; /* Slate 700 */
+        }
+    </style>
+</head>
+<body class="text-slate-800 p-4 md:p-8 min-h-screen flex flex-col items-center">
+
+    <div class="max-w-6xl w-full">
+        <!-- Encabezado y Contexto -->
+        <header class="mb-8 mt-4 md:mt-8">
+            <h1 class="text-3xl md:text-5xl font-bold mb-6 tracking-tight uppercase text-center">Cartografía de los Afectos: Cómo el Entorno Urbano Moldea Nuestra Educación Emocional</h1>
+            <p class="text-base md:text-lg text-slate-700 leading-relaxed text-justify">
+                La configuración de la ciudad contemporánea trasciende su dimensión física, consolidándose como un espacio pedagógico vivo que moldea la subjetividad, los afectos and la salud emocional de sus habitantes. Este trabajo final se propone explorar la intersección entre el paradigma de la Ciudad Educadora y la Salud Emocional en la construcción de proyectos de vida, analizando cómo el entorno urbano actúa como un agente pedagógico activo. A través de una revisión crítica de diversas perspectivas académicas, se indaga en el papel fundamental que desempeñan los lugares comunes —parques, plazas, iglesias, aeropuertos y centros comerciales— en la formación de la identidad y en la regulación emocional para diferentes convivencias ciudadana. Este ejercicio sostiene que la salud emocional no es una experiencia aislada, sino un fenómeno profundamente vinculado a la calidad del vínculo afectivo que el sujeto establece con su urbe. Al reconfigurar los espacios públicos como fuentes de “nutrición emocional”, se pretende trascender la alienación urbana para transitar hacia una ciudadanía sentiente. Así, la ciudad como “escenario de encuentro emotivo” es el requisito indispensable para garantizar el buen vivir, la resiliencia comunitaria y el desarrollo integral de toda la población en una metrópolis contemporánea.
+            </p>
+        </header>
+
+        <!-- Contenedor del Mapa interactivo -->
+        <div id="map-container">
+            <!-- Reproductor de YouTube Oculto -->
+            <div class="absolute overflow-hidden pointer-events-none opacity-0" style="width: 10px; height: 10px; top: -50px; left: -50px;">
+                <div id="youtube-player"></div>
+            </div>
+
+            <!-- Botón de Audio (Mute/Unmute) -->
+            <button id="mute-btn" onclick="toggleMute()" class="absolute top-4 left-4 bg-white/95 hover:bg-white text-slate-700 p-3 rounded-full shadow-lg z-[1001] transition-all border border-slate-200 cursor-pointer group" title="Silenciar/Activar Música">
+                <!-- Icono Volumen Activo -->
+                <svg id="icon-sound-on" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-600 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                </svg>
+                <!-- Icono Volumen Muteado -->
+                <svg id="icon-sound-off" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400 hidden group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <line x1="23" y1="9" x2="17" y2="15"></line>
+                    <line x1="17" y1="9" x2="23" y2="15"></line>
+                </svg>
+            </button>
+
+            <!-- Contenedor de Leaflet -->
+            <div id="map"></div>
+
+            <!-- Panel de Información (Modal interactivo) -->
+            <div id="info-panel" class="absolute bottom-0 left-0 w-full md:bottom-auto md:top-6 md:right-6 md:left-auto md:w-96 bg-white/95 backdrop-blur-md shadow-2xl rounded-t-3xl md:rounded-2xl overflow-hidden border border-slate-200 max-h-[85%] flex flex-col">
+                
+                <!-- Botón de cerrar -->
+                <button onclick="closePanel()" class="absolute top-3 right-3 bg-slate-800/40 hover:bg-slate-800/60 text-white rounded-full p-2 z-10 transition-colors backdrop-blur-md">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+
+                <!-- Imagen del lugar -->
+                <div class="relative h-48 md:h-52 w-full flex-shrink-0 grayscale-[20%]">
+                    <img id="panel-img" src="" alt="Imagen del lugar" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 to-transparent"></div>
+                    <div class="absolute bottom-4 left-4 right-4">
+                        <span id="panel-emotion" class="inline-block bg-slate-600 text-slate-100 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider mb-2 shadow-sm">
+                            Emoción
+                        </span>
+                        <h2 id="panel-title" class="text-xl font-bold text-white leading-tight">Nombre del Lugar</h2>
+                    </div>
+                </div>
+
+                <!-- Contenido pedagógico -->
+                <div class="p-5 overflow-y-auto">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reflexión Pedagógica</h3>
+                    <p id="panel-desc" class="text-slate-600 text-sm md:text-base leading-relaxed text-justify">
+                        Descripción de cómo afecta las emociones.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nuevas subcategorías -->
+        <div class="mt-12 space-y-8 pb-12">
+            
+            <!-- Llamado a Sentir la Ciudad -->
+            <section class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-2xl md:text-3xl font-bold tracking-tight uppercase">Llamado a Sentir la Ciudad</h2>
+                <p class="text-base md:text-lg text-slate-600 leading-relaxed text-justify">
+                    El análisis transversal de estos espacios-textos nos lleva a una conclusión irrefutable: la ciudad no es un mero contenedor físico, es un ecosistema afectivo. Debemos reconfigurar nuestra comprensión de los lugares comunes, entendiendo que cada tipología espacial despierta un entramado emocional que nutre o desgasta nuestra salud mental y condiciona el "buen vivir".
+                </p>
+            </section>
+
+            <!-- Recuadro de Arte Urbano -->
+            <section class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center">
+                <h2 class="text-2xl md:text-3xl font-bold tracking-tight uppercase text-center w-full">Expresión Afectiva de la Urbe</h2>
+                <div class="w-full rounded-xl overflow-hidden border border-slate-200 shadow-md grayscale-[10%] hover:grayscale-0 transition-all duration-500">
+                    <img src="https://cdn.colombia.com/sdi/2020/01/29/bogota-arte-urbano-puntos-806200.jpg" alt="[Arte Urbano en Bogotá]" class="w-full h-auto object-cover max-h-[500px]">
+                </div>
+                <p class="text-sm text-slate-500 mt-4 italic text-justify leading-relaxed max-w-4xl">
+                    El muralismo y el graffiti en Bogotá constituyen una de las formas de apropiación espacial más determinantes de la metrópoli. Tal como lo examina Espinosa Manrique (2009), el arte público se consolida como un potente elemento educador informal capaz de reconfigurar la frialdad del cemento, convirtiendo muros inertes en lienzos vivos que relatan tensiones socioafectivas, esperanzas políticas e identidades colectivas.
+                </p>
+                <p class="text-sm text-slate-500 mt-4 italic text-justify leading-relaxed max-w-4xl border-t border-slate-100 pt-4">
+                    Por otro lado, el arte urbano es un barómetro del estado emocional de la metrópoli. Los espacios públicos desprovistos de estímulos estéticos, o aquellos con elementos excluyentes, fomentan la alienación y la hostilidad. Por el contrario, un entorno que propicia la interacción visual y táctil valida las emociones del individuo, generando "emociones de cercanía y apego que permiten adoptar el espacio público". La salud emocional colectiva florece cuando la ciudad se deja leer e interpretar.
+                </p>
+            </section>
+
+            <!-- Referencias bibliográficas -->
+            <section class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-2xl md:text-3xl font-bold tracking-tight uppercase">Referencias Bibliográficas</h2>
+                <ul class="space-y-4 text-slate-600 text-sm md:text-base pl-6" style="list-style-type: none; text-indent: -1.5rem;">
+                    <li>
+                        Bryon, P., & Gaona, G. (s.f.). Ciudad Educadora entre la realidad y la utopía. [Documento PDF].
+                    </li>
+                    <li>
+                        Espinosa Manrique, D. L. (2009). Arte en el espacio público de Bogotá como elemento educador. <em>Revista Colombiana de Educación</em>, (57), 164-189.
+                    </li>
+                    <li>
+                        Mockus Sivickas, A. (s.f.). Ciudad y educación. [Documento PDF].
+                    </li>
+                    <li>
+                        Salcedo Serna, M. A., & Peñaloza Tello, M. L. (2024). Ciudad educadora, discapacidad e inclusión social. Propuesta de un marco ideológico para la implementación de políticas públicas a favor de la población con discapacidad. <em>Estudios Políticos (Universidad de Antioquia)</em>, (69), 77-102. https://doi.org/10.17533/udea.espo.n69a04
+                    </li>
+                </ul>
+            </section>
+
+            <!-- Autores -->
+            <section class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-2xl md:text-3xl font-bold tracking-tight uppercase">Autores</h2>
+                <div class="text-slate-600 text-sm md:text-base leading-relaxed space-y-2">
+                    <p><span class="font-semibold text-slate-700">Fuentes, Arón.</span> Código: 20261191009</p>
+                    <p><span class="font-semibold text-slate-700">Gómez, Manuel.</span> Código: 20261191005</p>
+                    <p><span class="font-semibold text-slate-700">Roa, Felipe.</span> Código: 20261191004</p>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <script>
+        // --- Lógica de la API de YouTube IFrame ---
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        var player;
+        var isPlayerReady = false;
+        var isMuted = false;
+        var hasStartedPlaying = false; // Variable para controlar si ya inició
+
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('youtube-player', {
+                height: '10', // Se añade un tamaño mínimo, los de 0x0 a veces son bloqueados
+                width: '10',
+                videoId: 'HKG8gAMgIAM', // ID del video de YouTube solicitado para el mapa
+                playerVars: {
+                    'autoplay': 0,
+                    'controls': 0,
+                    'showinfo': 0,
+                    'rel': 0,
+                    'loop': 1,
+                    'playlist': 'HKG8gAMgIAM',
+                    'playsinline': 1
+                },
+                events: {
+                    'onReady': function(event) {
+                        isPlayerReady = true;
+                        player.setVolume(50); // Volumen al 50% para que sea armonioso
+                    },
+                    'onError': function(event) {
+                        console.error("Error de reproducción de YouTube (Posible bloqueo por derechos de autor):", event.data);
+                        // Sistema de Respaldo: Si el video original está bloqueado para embeber, carga pista instrumental
+                        if (event.data === 150 || event.data === 101 || event.data === 153) {
+                            console.log("El video original no permite ser insertado. Cargando pista de respaldo...");
+                            player.loadVideoById('tNkZsRW7h2c');
+                        }
+                    }
+                }
+            });
+        }
+
+        // Función para el botón de silenciar/activar sonido
+        function toggleMute() {
+            if (!isPlayerReady) {
+                console.log("El reproductor aún está cargando...");
+                return;
+            }
+            const iconOn = document.getElementById('icon-sound-on');
+            const iconOff = document.getElementById('icon-sound-off');
+            
+            // Si el video aún no ha empezado a reproducirse, lo forzamos al hacer clic en el botón
+            if (!hasStartedPlaying) {
+                player.unMute();
+                player.playVideo();
+                hasStartedPlaying = true;
+                isMuted = false;
+                iconOn.classList.remove('hidden');
+                iconOff.classList.add('hidden');
+                return;
+            }
+            
+            if (isMuted) {
+                player.unMute();
+                isMuted = false;
+                iconOn.classList.remove('hidden');
+                iconOff.classList.add('hidden');
+            } else {
+                player.mute();
+                isMuted = true;
+                iconOn.classList.add('hidden');
+                iconOff.classList.remove('hidden');
+            }
+        }
+        
+        // Desbloquear el audio al primer clic en la pantalla (cualquier parte)
+        document.body.addEventListener('click', function() {
+            if (isPlayerReady && !hasStartedPlaying && !isMuted) {
+                player.playVideo();
+                hasStartedPlaying = true;
+            }
+        }, { once: true });
+        // -----------------------------------------
+
+        // Datos pedagógicos de los lugares
+        const places = [
+            {
+                id: 1,
+                name: "Portal Sur de Transmilenio",
+                lat: 4.5888, lng: -74.1661,
+                image: "https://bogota.gov.co/sites/default/files/styles/1050px/public/bloqueo_transmilenio.jpg",
+                fallbackImage: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Bogot%C3%A1_-_Transmilenio_01.jpg/800px-Bogot%C3%A1_-_Transmilenio_01.jpg",
+                emotion: "Frustración y Resiliencia",
+                text: "El afán diario, las multitudes y la espera constante generan una atmósfera de estrés, ansiedad y a veces frustración. Sin embargo, pedagógicamente es una escuela de resiliencia. Este espacio nos reta a practicar la paciencia, a tolerar la diferencia en espacios reducidos y a entender el transporte público como el sistema circulatorio que moviliza los sueños y el sustento de millones de personas."
+            },
+            {
+                id: 2,
+                name: "Parque Simón Bolívar",
+                lat: 4.6583, lng: -74.0936,
+                image: "https://bogota.gov.co/sites/default/files/styles/1050px/public/field/image/simon-bolivar.jpg",
+                fallbackImage: "https://images.unsplash.com/photo-1519331379826-f10be5486c6f?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+                emotion: "Paz y Libertad",
+                text: "Un pulmón verde en medio de la jungla de concreto. Al entrar aquí, la respiración cambia; despierta emociones de bienestar, calma y libertad. Como espacio educador, el parque nos enseña el valor del derecho al ocio y al encuentro democrático, pues aquí no existen barreras socioeconómicas. Nos reconecta con el cuidado ambiental y la importancia de la pausa en la vida moderna. Más allá del esparcimiento, es el escenario del urban attachment. Es donde la interacción con la naturaleza y el arte (como lo demuestra Espinosa Manrique) genera emociones de libertad, paz y familiaridad. Un parque inclusivo acoge la diversidad (como señalan Salcedo y Peñaloza) y democratiza el ocio, previniendo el aislamiento."
+            },
+            {
+                id: 3,
+                name: "Centro Comercial MallPlaza NQS",
+                lat: 4.6186, lng: -74.0863,
+                image: "https://d2yoo3qu6vrk5d.cloudfront.net/images/20221130123653/cropped-mall-plaza-mall-plaza-3.webp",
+                fallbackImage: "https://images.unsplash.com/photo-1519567281027-d15c1000b73b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+                emotion: "Estímulo y Pertenencia",
+                text: "Estos son nodos de alta densidad e intercambio. Si se rigen exclusivamente por el consumo, generan exclusión y anomia. Sin embargo, si aplicamos el \"saldo pedagógico\" de Mockus, pueden ser laboratorios de tolerancia civil. Son espacios donde nos vemos forzados a interactuar con el \"otro\" desconocido, ejercitando el respeto y reduciendo la fricción social."
+            },
+            {
+                id: 4,
+                name: "Aeropuerto Internacional El Dorado",
+                lat: 4.7011, lng: -74.1469,
+                image: "https://storage.eldoradoaero.com/schedule-push-notification/9c835e3e-4707-4a99-935e-6d71a4e1d0e3.jpeg",
+                fallbackImage: "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+                emotion: "Nostalgia y Esperanza",
+                text: "El gran umbral de la ciudad. El aire está cargado de lágrimas de despedida y abrazos de reencuentro. Produce ansiedad, expectativa y esperanza. Es un educador silencioso sobre la transitoriedad de la vida, la diversidad global y la multiculturalidad. Aquí aprendemos que Bogotá es un nodo que conecta historias locales con el resto del mundo. Representan la máxima expresión de la \"doble movilidad\" (tránsito de personas y saberes). Son escenarios transitorios que exigen la habilidad del \"ciudadano anfibio\". Gestionar el estrés y la incertidumbre en estos \"no-lugares\" requiere altos niveles de adaptabilidad y un diseño que ofrezca legibilidad y calma."
+            },
+            {
+                id: 5,
+                name: "Iglesia Divino Niño (20 de Julio)",
+                lat: 4.5752, lng: -74.0970,
+                image: "https://pbs.twimg.com/media/DN5vg4zWsAER99m.jpg",
+                fallbackImage: "https://images.unsplash.com/photo-1548625361-ec85cb03fb84?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+                emotion: "Fervor y Consuelo",
+                text: "Funcionan como anclajes de identidad comunitaria y cohesión. En contextos de marginación, como Ciudad Bolívar, estos espacios (junto con la escuela) son refugios emocionales donde se articula la resistencia cívica, la esperanza y la denuncia. Son reductos que mitigan la angustia frente a la violencia urbana."
+            },
+            {
+                id: 6,
+                name: "Zona Comercial San Victorino",
+                lat: 4.6015, lng: -74.0805,
+                image: "https://pluralidadz.com/wp-content/uploads/2026/04/San-Victorino-como-eje-historico-del-comercio-en-Bogota.webp",
+                fallbackImage: "https://images.unsplash.com/photo-1533900298318-6b8da08a523e?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+                emotion: "Sobrecarga y Vitalidad",
+                text: "El corazón palpitante del comercio popular y el rebusque. El ruido ensordecedor, los colores vibrantes y el contacto físico constante generan una sobrecarga sensorial que puede abrumar. No obstante, es la máxima universidad de la calle: enseña sobre recursividad, tenacidad, negociación y la cruda realidad económica de la supervivencia en América Latina."
+            }
+        ];
+
+        // Inicializar el mapa centrado en Bogotá
+        const map = L.map('map', {
+            zoomControl: false // Ocultamos el control por defecto para moverlo si queremos, o dejarlo así para diseño limpio
+        }).setView([4.6300, -74.1100], 12); // Coordenadas centrales promedio de Bogotá
+
+        // Añadir control de zoom en una posición diferente
+        L.control.zoom({
+            position: 'bottomleft'
+        }).addTo(map);
+
+        // Capa de OpenStreetMap (estilo limpio y gris posicional)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Crear un icono personalizado (usando HTML/CSS)
+        const customIcon = L.divIcon({
+            className: 'custom-icon-wrapper',
+            html: '<div class="custom-marker w-5 h-5 md:w-6 md:h-6"></div>',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+
+        const infoPanel = document.getElementById('info-panel');
+        const panelImg = document.getElementById('panel-img');
+        const panelEmotion = document.getElementById('panel-emotion');
+        const panelTitle = document.getElementById('panel-title');
+        const panelDesc = document.getElementById('panel-desc');
+
+        // Función para cerrar el panel
+        function closePanel() {
+            infoPanel.classList.remove('active');
+        }
+
+        // Añadir marcadores al mapa
+        places.forEach(place => {
+            const marker = L.marker([place.lat, place.lng], { icon: customIcon }).addTo(map);
+            
+            // Añadir un pequeño tooltip al pasar el mouse
+            marker.bindTooltip(place.name, {
+                direction: 'top',
+                offset: [0, -10],
+                className: 'font-semibold text-sm rounded shadow-lg'
+            });
+
+            // Evento al hacer clic en el marcador
+            marker.on('click', () => {
+                // Iniciar la música de YouTube si el reproductor está listo
+                if (isPlayerReady && !hasStartedPlaying && !isMuted) {
+                    player.playVideo();
+                    hasStartedPlaying = true;
+                }
+
+                // Actualizar contenido del panel
+                panelImg.src = place.image;
+                
+                // Si la imagen local falla (como en esta vista previa), usar la imagen de respaldo
+                panelImg.onerror = function() {
+                    this.onerror = null; // Evitar ciclo infinito
+                    this.src = place.fallbackImage || 'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80';
+                };
+
+                panelEmotion.textContent = place.emotion;
+                panelTitle.textContent = place.name;
+                panelDesc.textContent = place.text;
+                
+                // Centrar el mapa suavemente (con un pequeño offset para que el panel no tape el marcador en móviles/desktop)
+                const isMobile = window.innerWidth <= 768;
+                let latOffset = isMobile ? -0.02 : 0; // Si es móvil, centrar un poco más arriba
+                let lngOffset = isMobile ? 0 : 0.03;  // Si es desktop, centrar un poco a la izquierda
+                
+                map.flyTo([place.lat + latOffset, place.lng - lngOffset], 14, {
+                    animate: true,
+                    duration: 1.5
+                });
+
+                // Mostrar el panel
+                infoPanel.classList.add('active');
+            });
+        });
+
+        // Cerrar el panel si se hace clic en cualquier otra parte del mapa
+        map.on('click', () => {
+            closePanel();
+        });
+
+    </script>
+</body>
+</html>
